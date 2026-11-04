@@ -107,6 +107,18 @@ class CliTests(unittest.TestCase):
         self.assertFalse((book / "build").exists())
         self.assertTrue((self.root / "shared/characters/john-doe.md").is_file())
 
+    def test_project_short_option_matches_long_option(self):
+        self.run_cli("init", "books/book one", "--metadata-dir", "shared")
+        self.run_cli("init", "books/book two", "--metadata-dir", "shared")
+        self.run_cli("-P", "books/book one", "new", "character", "john-doe")
+        short = self.run_cli("-P", "books/book two", "completion-data")
+        long = self.run_cli("--project", "books/book two", "completion-data")
+        self.assertEqual(json.loads(short.stdout), json.loads(long.stdout))
+        self.assertEqual(json.loads(short.stdout)["records"][0]["id"], "john-doe")
+        self.assertTrue((self.root / "shared/characters/john-doe.md").is_file())
+        help_output = self.run_cli("--help").stdout
+        self.assertRegex(help_output, r"-P(?: PROJECT)?, --project PROJECT")
+
     def test_missing_project_and_invalid_port_have_clear_errors(self):
         result = self.run_cli("build", success=False)
         self.assertIn("mightier init", result.stderr)

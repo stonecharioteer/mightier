@@ -113,10 +113,11 @@ mightier serve
 - `serve` prints a loopback URL, normally `http://127.0.0.1:8000/`.
 - `clean` removes that book's `build/` only.
 
-Commands find the nearest parent `mightier.toml`. You can also select a book:
+Commands find the nearest parent `mightier.toml`. Select a book from another
+folder with `-P` or `--project`, before the subcommand:
 
 ```sh
-mightier --project my-book build
+mightier -P my-book build
 mightier --project my-book serve --open
 ```
 
@@ -158,7 +159,14 @@ bibliography = "../../metadata/references.bib"
 
 The books share names, notes, and bibliography entries. Each keeps its own
 configuration and chapter order. Run commands inside the book you are editing,
-or select it with `--project`. There is no multi-book build command.
+or select it with `-P` or `--project`. For example, add a shared character from
+the series folder:
+
+```sh
+mightier -P books/book-01 new character john-doe
+```
+
+There is no multi-book build command.
 
 ## Shared names and private notes
 

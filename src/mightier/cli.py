@@ -38,6 +38,7 @@ def parser():
         help="File log level. Defaults to debug.",
     )
     result.add_argument(
+        "-P",
         "--project",
         type=Path,
         help="Book folder containing mightier.toml. Defaults to the nearest parent project.",
