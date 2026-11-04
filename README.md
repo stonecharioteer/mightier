@@ -7,17 +7,35 @@
 A small book-writing CLI. Write Markdown, share character and place notes, build
 EPUBs, and read a live HTML preview while you edit.
 
-## Install
+## Install globally with uv
 
-Mightier requires stable Python 3.14 or later. `uv` can provide the interpreter.
-Install [uv](https://docs.astral.sh/uv/) first, then:
+Install [uv](https://docs.astral.sh/uv/) first, then install Mightier:
 
 ```sh
 uv tool install --python 3.14 git+https://github.com/stonecharioteer/mightier
+```
+
+This installs `mightier` for your user account. You can run it from any folder.
+No `sudo`, virtual-environment activation, or Python project is needed in your
+book folder. uv manages the tool's environment and can install the required
+stable Python 3.14 interpreter. The package supports Python 3.14 and later.
+
+If your shell cannot find `mightier`, add uv's tool directory to `PATH`:
+
+```sh
+uv tool update-shell
+```
+
+Restart your shell, then check the installation and install missing build tools:
+
+```sh
+mightier --help
 mightier setup
 ```
 
-Or run without a permanent installation:
+### Run without installing globally
+
+Use `uvx` for a single invocation without a permanent CLI installation:
 
 ```sh
 uvx --python 3.14 --from git+https://github.com/stonecharioteer/mightier mightier --help
@@ -32,30 +50,25 @@ dependency. Homebrew and uv are initial prerequisites, not installed by the CLI.
 
 ## Initialize a book
 
-Each book folder is a separate project:
+Create a book and enter its folder:
 
 ```sh
-mightier init books/book-01 --metadata-dir metadata
-mightier init books/book-02 --metadata-dir metadata
+mightier init my-book
+cd my-book
 ```
 
-`--metadata-dir` is relative to the command's working directory. The example
-shares one `metadata/` directory across both books. If omitted, each book gets
-its own `metadata/` directory.
+Mightier creates the configuration, an opening chapter, and a local metadata
+directory:
 
 ```text
-metadata/
-  characters/
-  places/
-books/
-  book-01/
-    mightier.toml
-    chapters/
-      01-arrival.md
-  book-02/
-    mightier.toml
-    chapters/
-      01-arrival.md
+my-book/
+  mightier.toml
+  chapters/
+    01-arrival.md
+  metadata/
+    characters/
+    places/
+    references.bib
 ```
 
 Edit the generated `mightier.toml`:
@@ -65,8 +78,8 @@ schema-version = 1
 title = "The long return"
 author = "Your name"
 lang = "en"
-metadata-dir = "../../metadata"
-bibliography = "../../metadata/references.bib"
+metadata-dir = "metadata"
+bibliography = "metadata/references.bib"
 chapters = [
   "chapters/01-arrival.md",
   "chapters/02-departure.md",
@@ -103,13 +116,49 @@ mightier serve
 Commands find the nearest parent `mightier.toml`. You can also select a book:
 
 ```sh
-mightier --project books/book-01 build
-mightier --project books/book-02 serve --port 8001 --open
+mightier --project my-book build
+mightier --project my-book serve --open
 ```
 
-There is no workspace configuration or multi-book build command. No Python
-project, virtual environment, Justfile, or tooling source is needed in a writing
-repository.
+No Python project, virtual environment, Justfile, or tooling source is needed in
+a writing repository.
+
+## Share metadata across a series
+
+Initialize each book separately from your series folder. Point each one to the
+same metadata directory:
+
+```sh
+mightier init books/book-01 --metadata-dir metadata
+mightier init books/book-02 --metadata-dir metadata
+```
+
+```text
+series/
+  metadata/
+    characters/
+    places/
+    references.bib
+  books/
+    book-01/
+      mightier.toml
+      chapters/
+    book-02/
+      mightier.toml
+      chapters/
+```
+
+`--metadata-dir` resolves from the command's working directory. Each book stores
+the resulting paths relative to its own folder:
+
+```toml
+metadata-dir = "../../metadata"
+bibliography = "../../metadata/references.bib"
+```
+
+The books share names, notes, and bibliography entries. Each keeps its own
+configuration and chapter order. Run commands inside the book you are editing,
+or select it with `--project`. There is no multi-book build command.
 
 ## Shared names and private notes
 
