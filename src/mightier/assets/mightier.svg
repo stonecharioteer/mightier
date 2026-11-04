@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 128 128" shape-rendering="crispEdges" role="img" aria-labelledby="title description">
+  <title id="title">Mightier</title>
+  <desc id="description">A pixelated sword with a gold fountain-pen nib for its blade. A dark ink slit runs from the tip towards a small square breather hole.</desc>
+  <!-- The outline follows a four-pixel grid. The background is transparent. -->
+  <path fill="#252a35" d="M100 4h16v16h-4v12h-4v12h-4v8h-8v8h-8v8h-8v8h-8v8h-8v8h-8v4H44V84h-8V72h8v-8h8v-8h8v-8h8v-8h8v-8h8v-8h8V12h8z"/>
+  <!-- The steel edge gives the nib the length and profile of a sword. -->
+  <path fill="#d7e5e8" d="M100 12h8v12h-8v12h-8v8h-8v8h-8v8h-8v8h-8v8h-8v8h-8v-8h8v-8h8v-8h8v-8h8v-8h8v-8h8v-8h8z"/>
+  <path fill="#9bb4bf" d="M104 28h4v12h-8v8h-8v8h-8v8h-8v8h-8v8h-8v8H48v-4h8v-8h8v-8h8v-8h8v-8h8v-8h8v-8h8z"/>
+  <!-- A broad gold nib, with stepped shoulders and a visible ink channel. -->
+  <path fill="#eab75d" d="M104 12h4v16h-4v12h-8v8h-8v8h-8v8H68v-8h8v-8h8v-8h8V28h8V16h4z"/>
+  <path fill="#f8d88d" d="M104 16h4v8h-8v12h-8v8h-8v8h-8v4h-4v-4h8v-8h8v-8h8V24h8z"/>
+  <path fill="#252a35" d="M104 16h4v8h-4v8h-4v4h-4v4h-4v4h-4v4h-4v4h-4v4h-4v-8h8v-8h8v-8h8V20h4z"/>
+  <path fill="#252a35" d="M68 56h8v8h-8z"/>
+  <!-- Crossguard and grip. -->
+  <path fill="#252a35" d="M24 60h12v8h8v8h8v8h8v8h8v12H56v-8h-8v-8h-8v-8h-8v-8h-8z"/>
+  <path fill="#eab75d" d="M28 64h4v8h8v8h8v8h8v8h8v4h-4v-8h-8v-8h-8v-8h-8v-8h-8z"/>
+  <path fill="#252a35" d="M28 80h12v12h8v12H36v8H20v-8H12V88h8z"/>
+  <path fill="#934d43" d="M28 84h8v8h8v8h-8v8H24v-8h-8v-8h8v-4h4z"/>
+  <path fill="#d88b68" d="M28 88h8v4h-4v8h-8v-4h4zm8 8h8v4h-8z"/>
+  <!-- Square pommel, with one bright pixel. -->
+  <path fill="#252a35" d="M8 100h12v8h8v12H8v-8H4v-8h4z"/>
+  <path fill="#eab75d" d="M12 104h4v8h8v4H12v-8H8v-4z"/>
+  <path fill="#f8d88d" d="M8 104h4v4H8z"/>
+</svg>

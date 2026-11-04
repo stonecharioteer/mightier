@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mightier"
+version = "0.1.0"
+description = "Write books in Markdown with shared metadata, EPUB builds, and live previews."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = ["PyYAML>=6.0.3,<7", "rich>=14.0,<15"]
+
+[project.scripts]
+mightier = "mightier.cli:main"
+
+[project.urls]
+Repository = "https://github.com/stonecharioteer/mightier"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mightier"]
