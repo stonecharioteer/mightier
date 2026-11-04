@@ -74,10 +74,32 @@ def parser():
     preview.add_argument(
         "--open", action="store_true", help="Open the preview in your browser."
     )
-    new = commands.add_parser("new", help="Create a metadata record or reference.")
+    new = commands.add_parser(
+        "new", help="Create a chapter, metadata record, or reference."
+    )
     kinds = new.add_subparsers(dest="kind", required=True, metavar="TYPE")
+    chapter = kinds.add_parser(
+        "chapter", help="Create a chapter and append it to mightier.toml."
+    )
+    chapter.add_argument("id", help="Filename stem, such as 02-return.")
+    chapter.add_argument(
+        "--title", help="Opening heading. Defaults to text derived from the filename."
+    )
     for kind in (*ENTITY_FOLDERS, "reference"):
         kinds.add_parser(kind, help=f"Create a {kind} record.").add_argument("id")
+    rename = commands.add_parser(
+        "rename", help="Rename a file and update its configuration."
+    )
+    renamable = rename.add_subparsers(dest="kind", required=True, metavar="TYPE")
+    renamed_chapter = renamable.add_parser(
+        "chapter", help="Rename a chapter without changing its text or reading order."
+    )
+    renamed_chapter.add_argument(
+        "old", help="Listed filename stem or book-relative chapter path."
+    )
+    renamed_chapter.add_argument(
+        "new", help="New filename stem, such as 02-homecoming."
+    )
     edit = commands.add_parser(
         "edit", help="Open and validate an individual record or book configuration."
     )
@@ -147,8 +169,16 @@ def main(argv=None):
             from mightier.editing import edit
 
             edit(project, arguments.kind, getattr(arguments, "id", None))
+        elif arguments.command == "rename":
+            from mightier.chapters import rename_chapter
+
+            rename_chapter(project, arguments.old, arguments.new)
         elif arguments.command == "new":
-            if arguments.kind == "reference":
+            if arguments.kind == "chapter":
+                from mightier.chapters import new_chapter
+
+                new_chapter(project, arguments.id, arguments.title)
+            elif arguments.kind == "reference":
                 project.new_reference(arguments.id)
             else:
                 project.new_entity(arguments.kind, arguments.id)

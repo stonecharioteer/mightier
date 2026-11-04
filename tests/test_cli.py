@@ -107,6 +107,30 @@ class CliTests(unittest.TestCase):
         self.assertFalse((book / "build").exists())
         self.assertTrue((self.root / "shared/characters/john-doe.md").is_file())
 
+    @unittest.skipUnless(shutil.which("pandoc"), "Pandoc is required")
+    def test_new_and_rename_chapter_update_the_manifest(self):
+        self.run_cli("init", "book one", "--metadata-dir", "shared")
+        book = self.root / "book one"
+        self.run_cli(
+            "-P", str(book), "new", "chapter", "02-return", "--title", "The return"
+        )
+        source = book / "chapters/02-return.md"
+        self.assertEqual(source.read_text(), "# The return\n\n")
+        self.run_cli("-P", str(book), "rename", "chapter", "02-return", "02-homecoming")
+        self.assertFalse(source.exists())
+        target = book / "chapters/02-homecoming.md"
+        self.assertEqual(target.read_text(), "# The return\n\n")
+        self.run_cli("new", "chapter", "02-homecoming", cwd=book, success=False)
+        self.run_cli("rename", "chapter", "missing", "03-next", cwd=book, success=False)
+        self.run_cli("check", cwd=book)
+        self.run_cli("build", "--format", "html", cwd=book)
+        self.assertIn("The return", (book / "build/book.html").read_text())
+        for arguments in (
+            ("new", "chapter", "--help"),
+            ("rename", "chapter", "--help"),
+        ):
+            self.assertIn("chapter", self.run_cli(*arguments).stdout)
+
     def test_project_short_option_matches_long_option(self):
         self.run_cli("init", "books/book one", "--metadata-dir", "shared")
         self.run_cli("init", "books/book two", "--metadata-dir", "shared")

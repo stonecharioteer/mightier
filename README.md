@@ -124,6 +124,41 @@ mightier --project my-book serve --open
 No Python project, virtual environment, Justfile, or tooling source is needed in
 a writing repository.
 
+## Add and rename chapters
+
+From the book folder:
+
+```sh
+mightier new chapter 02-return --title "The return"
+mightier rename chapter 02-return 02-homecoming
+```
+
+`new chapter` creates `chapters/02-return.md` with the requested heading and
+appends its path to `chapters` in `mightier.toml`. Omit `--title` to derive a
+heading from the name. Names are lowercase filename stems with hyphens. The
+`.md` extension is added automatically. Supply any numbering yourself.
+
+`rename chapter` renames the file to `chapters/02-homecoming.md` and replaces its
+path at the same position in the chapter list. It preserves all chapter text,
+including the heading. To change the displayed title, edit the Markdown heading
+in your editor. Links in other files are not rewritten.
+
+The old chapter can be selected by its filename stem, filename, or listed
+book-relative path. If stems are ambiguous, use the full book-relative path.
+Renaming keeps the file in its current directory.
+
+Both commands preserve TOML comments and unrelated settings, reject existing
+destination files, and check for concurrent configuration edits. A hidden
+`.mightier-project.lock` serializes chapter changes. Keep it out of version
+control. Generated projects already include an ignore rule.
+
+From another folder, use the project option:
+
+```sh
+mightier -P my-book new chapter 03-departure --title "Departure"
+mightier -P my-book rename chapter 03-departure 03-the-road
+```
+
 ## Share metadata across a series
 
 Initialize each book separately from your series folder. Point each one to the

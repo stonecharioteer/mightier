@@ -219,7 +219,8 @@ class Project:
             ignore = self.root / ".gitignore"
             if not ignore.exists():
                 ignore.write_text(
-                    "/build/\nmightier.log*\n.mightier-log.lock\n", encoding="utf-8"
+                    "/build/\nmightier.log*\n.mightier-log.lock\n.mightier-project.lock\n",
+                    encoding="utf-8",
                 )
         for folder in ENTITY_FOLDERS.values():
             directory = self.metadata_dir / folder

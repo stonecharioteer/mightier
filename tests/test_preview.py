@@ -159,6 +159,20 @@ class PreviewTests(ProjectCase):
         self.wait_for(lambda: bool(self.preview.status()["error"]))
         self.assertEqual(self.preview.status()["version"], original)
 
+    def test_chapter_commands_update_the_live_preview(self):
+        from mightier.chapters import new_chapter, rename_chapter
+
+        self.watch()
+        original = self.preview.status()["version"]
+        new_chapter(self.project, "02-return", "The return")
+        self.wait_for(lambda: self.preview.status()["version"] != original)
+        self.assertIn("The return", self.read().decode())
+        original = self.preview.status()["version"]
+        rename_chapter(self.project, "02-return", "02-homecoming")
+        self.wait_for(lambda: self.preview.status()["version"] != original)
+        self.assertEqual(self.preview.status()["error"], "")
+        self.assertIn("The return", self.read().decode())
+
     def test_logs_and_generated_output_do_not_trigger_build_loops(self):
         before = self.preview.snapshot()
         for name in ("mightier.log", "mightier.log.1", "build/extra.html"):
