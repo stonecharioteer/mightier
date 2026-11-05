@@ -41,13 +41,15 @@ class CliTests(unittest.TestCase):
                 self.assertIn("The Pen is mightier than the Sword.", result.stdout)
                 self.assertIn("▀", result.stdout)
                 self.assertIn("Show the logo", result.stdout)
-                self.assertIn("new", result.stdout)
+                self.assertIn("character", result.stdout)
+                self.assertIn("chapter", result.stdout)
                 self.assertNotIn("new-character", result.stdout)
                 self.assertNotIn("new-place", result.stdout)
                 self.assertNotIn("\033_G", result.stdout)
-        result = self.run_cli("new", "--help")
-        self.assertIn("character", result.stdout)
-        self.assertIn("reference", result.stdout)
+        result = self.run_cli("character", "--help")
+        for action in ("new", "edit", "rename"):
+            self.assertIn(action, result.stdout)
+        self.run_cli("new", "character", "old-order", success=False)
 
     @unittest.skipUnless(shutil.which("uv"), "uv is required")
     def test_exact_uv_run_help_command(self):
@@ -86,12 +88,29 @@ class CliTests(unittest.TestCase):
     def test_complete_project_workflow_from_other_directories(self):
         self.run_cli("init", "book one", "--metadata-dir", "shared")
         book = self.root / "book one"
-        self.run_cli("new", "character", "john-doe", cwd=book)
-        self.run_cli("new", "place", "greyhaven", cwd=book)
-        self.run_cli("new", "reference", "doe2024", cwd=book)
-        self.run_cli("new", "character", "john-doe", cwd=book, success=False)
-        self.run_cli("new", "character", "../outside", cwd=book, success=False)
-        self.run_cli("new", "character", "bad; touch injected", cwd=book, success=False)
+        self.run_cli("character", "new", "john-doe", cwd=book)
+        self.run_cli("place", "new", "greyhaven", cwd=book)
+        self.run_cli("reference", "new", "doe2024", cwd=book)
+        self.run_cli(
+            "character",
+            "edit",
+            "john-doe",
+            cwd=book,
+            environment={"EDITOR": "true", "VISUAL": ""},
+        )
+        self.run_cli(
+            "reference",
+            "edit",
+            "doe2024",
+            cwd=book,
+            environment={"EDITOR": "true", "VISUAL": ""},
+        )
+        self.run_cli(
+            "book", "edit", cwd=book, environment={"EDITOR": "true", "VISUAL": ""}
+        )
+        self.run_cli("character", "new", "john-doe", cwd=book, success=False)
+        self.run_cli("character", "new", "../outside", cwd=book, success=False)
+        self.run_cli("character", "new", "bad; touch injected", cwd=book, success=False)
         self.assertFalse((book / "injected").exists())
         self.run_cli("check", cwd=book / "chapters")
         self.run_cli("--project", str(book), "build")
@@ -112,29 +131,29 @@ class CliTests(unittest.TestCase):
         self.run_cli("init", "book one", "--metadata-dir", "shared")
         book = self.root / "book one"
         self.run_cli(
-            "-P", str(book), "new", "chapter", "02-return", "--title", "The return"
+            "-P", str(book), "chapter", "new", "02-return", "--title", "The return"
         )
         source = book / "chapters/02-return.md"
         self.assertEqual(source.read_text(), "# The return\n\n")
-        self.run_cli("-P", str(book), "rename", "chapter", "02-return", "02-homecoming")
+        self.run_cli("-P", str(book), "chapter", "rename", "02-return", "02-homecoming")
         self.assertFalse(source.exists())
         target = book / "chapters/02-homecoming.md"
         self.assertEqual(target.read_text(), "# The return\n\n")
-        self.run_cli("new", "chapter", "02-homecoming", cwd=book, success=False)
-        self.run_cli("rename", "chapter", "missing", "03-next", cwd=book, success=False)
+        self.run_cli("chapter", "new", "02-homecoming", cwd=book, success=False)
+        self.run_cli("chapter", "rename", "missing", "03-next", cwd=book, success=False)
         self.run_cli("check", cwd=book)
         self.run_cli("build", "--format", "html", cwd=book)
         self.assertIn("The return", (book / "build/book.html").read_text())
         for arguments in (
-            ("new", "chapter", "--help"),
-            ("rename", "chapter", "--help"),
+            ("chapter", "new", "--help"),
+            ("chapter", "rename", "--help"),
         ):
             self.assertIn("chapter", self.run_cli(*arguments).stdout)
 
     def test_project_short_option_matches_long_option(self):
         self.run_cli("init", "books/book one", "--metadata-dir", "shared")
         self.run_cli("init", "books/book two", "--metadata-dir", "shared")
-        self.run_cli("-P", "books/book one", "new", "character", "john-doe")
+        self.run_cli("-P", "books/book one", "character", "new", "john-doe")
         short = self.run_cli("-P", "books/book two", "completion-data")
         long = self.run_cli("--project", "books/book two", "completion-data")
         self.assertEqual(json.loads(short.stdout), json.loads(long.stdout))
@@ -142,6 +161,34 @@ class CliTests(unittest.TestCase):
         self.assertTrue((self.root / "shared/characters/john-doe.md").is_file())
         help_output = self.run_cli("--help").stdout
         self.assertRegex(help_output, r"-P(?: PROJECT)?, --project PROJECT")
+
+    @unittest.skipUnless(shutil.which("pandoc"), "Pandoc is required")
+    def test_character_rename_updates_the_shared_series(self):
+        self.run_cli("init", "books/one", "--metadata-dir", "shared")
+        self.run_cli("init", "books/two", "--metadata-dir", "shared")
+        self.run_cli("-P", "books/one", "character", "new", "john-doe")
+        for book in ("one", "two"):
+            (self.root / "books" / book / "chapters/01-arrival.md").write_text(
+                "# Opening\n\n{{character:john-doe}} arrived.\n"
+            )
+        result = self.run_cli(
+            "-P",
+            "books/one",
+            "character",
+            "rename",
+            "john-doe",
+            "jane-doe",
+            "--dry-run",
+        )
+        self.assertIn("Dry run", result.stdout)
+        self.assertTrue((self.root / "shared/characters/john-doe.md").exists())
+        self.run_cli("-P", "books/one", "character", "rename", "john-doe", "jane-doe")
+        self.assertFalse((self.root / "shared/characters/john-doe.md").exists())
+        self.assertTrue((self.root / "shared/characters/jane-doe.md").exists())
+        for book in ("one", "two"):
+            text = (self.root / "books" / book / "chapters/01-arrival.md").read_text()
+            self.assertIn("{{character:jane-doe}}", text)
+            self.run_cli("-P", "books/" + book, "check")
 
     def test_missing_project_and_invalid_port_have_clear_errors(self):
         result = self.run_cli("build", success=False)

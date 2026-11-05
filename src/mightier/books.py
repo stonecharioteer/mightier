@@ -78,9 +78,10 @@ def require_slug(value):
     return value
 
 
-def read_entity_document(kind, path):
+def read_entity_document(kind, path, *, content=None):
     require_slug(path.stem)
-    lines = path.read_text(encoding="utf-8").splitlines()
+    text = path.read_text(encoding="utf-8") if content is None else content
+    lines = text.splitlines()
     if not lines or lines[0] != "---":
         raise BookError(f"{path}: start the file with YAML front matter.")
     try:
@@ -182,7 +183,8 @@ class Metadata:
             raise BookError(f"{shared}: metadata directory is missing.")
         for kind, folder in ENTITY_FOLDERS.items():
             for path in sorted((shared / folder).glob("*.md")):
-                yield kind, path
+                if not path.name.startswith("."):
+                    yield kind, path
 
     def load_entities(self):
         entities = {}
@@ -254,13 +256,22 @@ class Project:
             ignore = self.root / ".gitignore"
             if not ignore.exists():
                 ignore.write_text(
-                    "/build/\nmightier.log*\n.mightier-log.lock\n.mightier-project.lock\n",
+                    "/build/\nmightier.log*\n.mightier-log.lock\n.mightier-project.lock\n.mightier-metadata.lock\n.mightier-*\n",
                     encoding="utf-8",
                 )
         for folder in ENTITY_FOLDERS.values():
             directory = self.metadata_dir / folder
             directory.mkdir(parents=True, exist_ok=True)
             (directory / ".gitkeep").touch(exist_ok=True)
+        try:
+            with (self.metadata_dir / ".gitignore").open(
+                "x", encoding="utf-8"
+            ) as stream:
+                stream.write(
+                    "mightier.log*\n.mightier-log.lock\n.mightier-metadata.lock\n.mightier-*\n"
+                )
+        except FileExistsError:
+            pass
         bibliography = self.bibliography
         bibliography.parent.mkdir(parents=True, exist_ok=True)
         if not bibliography.exists():

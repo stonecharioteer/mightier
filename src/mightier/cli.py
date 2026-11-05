@@ -36,6 +36,11 @@ class HelpParser(argparse.ArgumentParser):
             super().print_help(file)
 
 
+def resource(commands, name, description):
+    group = commands.add_parser(name, help=description)
+    return group.add_subparsers(dest="action", required=True, metavar="ACTION")
+
+
 def parser():
     result = HelpParser(
         description="Write books in Markdown. Build EPUBs and preview changes live."
@@ -82,57 +87,79 @@ def parser():
     preview = commands.add_parser(
         "serve", help="Serve a local HTML preview and reload it on saved changes."
     )
-    preview.add_argument("--port", type=int, default=8000)
+    preview.add_argument("--port", type=int, default=8000).completer = no_values
     preview.add_argument(
         "--open", action="store_true", help="Open the preview in your browser."
     )
-    new = commands.add_parser(
-        "new", help="Create a chapter, metadata record, or reference."
+
+    chapters = resource(commands, "chapter", "Create and rename chapter files.")
+    new = chapters.add_parser(
+        "new", help="Create a chapter and append it to mightier.toml."
     )
-    kinds = new.add_subparsers(dest="kind", required=True, metavar="TYPE")
-    chapter = kinds.add_parser(
-        "chapter", help="Create a chapter and append it to mightier.toml."
-    )
-    chapter.add_argument(
+    new.add_argument(
         "id", help="Filename stem, such as 02-return."
     ).completer = SuppressCompleter()
-    chapter.add_argument(
+    new.add_argument(
         "--title", help="Opening heading. Defaults to text derived from the filename."
     ).completer = no_values
-    for kind in (*ENTITY_FOLDERS, "reference"):
-        kinds.add_parser(kind, help=f"Create a {kind} record.").add_argument(
-            "id"
-        ).completer = SuppressCompleter()
-    rename = commands.add_parser(
-        "rename", help="Rename a file and update its configuration."
+    rename = chapters.add_parser(
+        "rename", help="Rename a chapter without changing its text or reading order."
     )
-    renamable = rename.add_subparsers(dest="kind", required=True, metavar="TYPE")
-    renamed_chapter = renamable.add_parser(
-        "chapter", help="Rename a chapter without changing its text or reading order."
-    )
-    renamed_chapter.add_argument(
+    rename.add_argument(
         "old", help="Listed filename stem or book-relative chapter path."
     ).completer = chapter_names
-    renamed_chapter.add_argument(
+    rename.add_argument(
         "new", help="New filename stem, such as 02-homecoming."
     ).completer = SuppressCompleter()
-    edit = commands.add_parser(
-        "edit", help="Open and validate an individual record or book configuration."
-    )
-    editable = edit.add_subparsers(dest="kind", required=True, metavar="TYPE")
-    editable.add_parser("book", help="Edit mightier.toml.")
-    for kind in (*ENTITY_FOLDERS, "reference"):
-        editable.add_parser(kind, help=f"Edit a {kind} record.").add_argument(
+
+    for kind in ENTITY_FOLDERS:
+        actions = resource(commands, kind, f"Create, edit, and rename {kind} records.")
+        actions.add_parser("new", help=f"Create a {kind} record.").add_argument(
+            "id"
+        ).completer = SuppressCompleter()
+        actions.add_parser("edit", help=f"Edit a {kind} record.").add_argument(
             "id"
         ).completer = record_names(kind)
+        rename = actions.add_parser(
+            "rename", help=f"Rename a {kind} ID and update its references."
+        )
+        rename.add_argument("old", help="Existing record ID.").completer = record_names(
+            kind
+        )
+        rename.add_argument(
+            "new", help="New record ID."
+        ).completer = SuppressCompleter()
+        rename.add_argument(
+            "--scope",
+            type=Path,
+            help="Directory containing all affected books and their shared metadata.",
+        ).completer = DirectoriesCompleter()
+        rename.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="List planned changes without modifying manuscript files.",
+        )
+
+    references = resource(
+        commands, "reference", "Create and edit bibliography entries."
+    )
+    references.add_parser("new", help="Add a BibTeX entry.").add_argument(
+        "id"
+    ).completer = SuppressCompleter()
+    references.add_parser("edit", help="Edit a BibTeX entry.").add_argument(
+        "id"
+    ).completer = record_names("reference")
+    resource(commands, "book", "Edit the book configuration.").add_parser(
+        "edit", help="Edit mightier.toml."
+    )
     commands.add_parser("clean", help="Remove this book's build directory only.")
     commands.add_parser(
         "completion", help="Generate shell completion for Fish, Bash, or Zsh."
     ).add_argument("shell", choices=SHELLS)
-    data_command = commands.add_parser(
+    data = commands.add_parser(
         "completion-data", help="Read metadata as JSON for editor integration."
     )
-    data_command.add_argument(
+    data.add_argument(
         "--metadata-dir",
         type=Path,
         help="Read a standalone metadata directory without a book project.",
@@ -142,7 +169,6 @@ def parser():
 
 def main(argv=None):
     command_parser = parser()
-    # Shell completion is read-only. Run it before logging, output, or dispatch.
     argcomplete.autocomplete(command_parser, always_complete_options=False)
     argv = sys.argv[1:] if argv is None else argv
     preliminary = argparse.ArgumentParser(add_help=False)
@@ -174,8 +200,9 @@ def main(argv=None):
                 raise BookError(
                     "Choose either --project or an init directory, not both."
                 )
-            project = Project(arguments.directory or arguments.project or Path.cwd())
-            project.initialize(arguments.metadata_dir)
+            Project(arguments.directory or arguments.project or Path.cwd()).initialize(
+                arguments.metadata_dir
+            )
             return 0
         if (
             arguments.command == "completion-data"
@@ -197,7 +224,6 @@ def main(argv=None):
             else Project.discover()
         )
         if arguments.command == "completion-data":
-            # Keep stdout valid JSON even when terminal colours are forced.
             print(json.dumps(collect(project), ensure_ascii=False))
         elif arguments.command == "check":
             project.check()
@@ -210,25 +236,41 @@ def main(argv=None):
             serve(project, port=arguments.port, open_browser=arguments.open)
         elif arguments.command == "clean":
             project.clean()
-        elif arguments.command == "edit":
+        elif arguments.command == "chapter":
+            from mightier.chapters import new_chapter, rename_chapter
+
+            if arguments.action == "new":
+                new_chapter(project, arguments.id, arguments.title)
+            else:
+                rename_chapter(project, arguments.old, arguments.new)
+        elif arguments.command in ENTITY_FOLDERS:
+            if arguments.action == "new":
+                project.new_entity(arguments.command, arguments.id)
+            elif arguments.action == "edit":
+                from mightier.editing import edit
+
+                edit(project, arguments.command, arguments.id)
+            else:
+                from mightier.renaming import rename_entity
+
+                rename_entity(
+                    project,
+                    arguments.command,
+                    arguments.old,
+                    arguments.new,
+                    arguments.scope,
+                    arguments.dry_run,
+                )
+        elif arguments.command == "reference" and arguments.action == "new":
+            project.new_reference(arguments.id)
+        else:
             from mightier.editing import edit
 
-            edit(project, arguments.kind, getattr(arguments, "id", None))
-        elif arguments.command == "rename":
-            from mightier.chapters import rename_chapter
-
-            rename_chapter(project, arguments.old, arguments.new)
-        elif arguments.command == "new":
-            if arguments.kind == "chapter":
-                from mightier.chapters import new_chapter
-
-                new_chapter(project, arguments.id, arguments.title)
-            elif arguments.kind == "reference":
-                project.new_reference(arguments.id)
-            else:
-                project.new_entity(arguments.kind, arguments.id)
+            edit(project, arguments.command, getattr(arguments, "id", None))
     except (BookError, OSError, UnicodeError) as error:
-        logger.exception("Command failed: %s", arguments.command)
+        logger.exception(
+            "Command failed: %s %s", arguments.command, getattr(arguments, "action", "")
+        )
         failure(str(error))
         return 1
     except KeyboardInterrupt:

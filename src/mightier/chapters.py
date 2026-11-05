@@ -3,7 +3,6 @@
 import fcntl
 import os
 import re
-import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -11,6 +10,7 @@ import tomlkit
 from tomlkit.exceptions import ParseError
 
 from mightier.books import CONFIG, BookError, require_slug, require_text
+from mightier.file_ops import atomic_write, create_file
 from mightier.logging_config import logger
 from mightier.output import success
 
@@ -46,26 +46,7 @@ def config_state(project):
 
 def write_config(path, expected, replacement):
     """Replace a complete configuration, but never discard a concurrent edit."""
-    replacement = (
-        replacement.encode("utf-8") if isinstance(replacement, str) else replacement
-    )
-    descriptor, temporary = tempfile.mkstemp(
-        prefix=".mightier-", suffix=".toml", dir=path.parent
-    )
-    temporary = Path(temporary)
-    try:
-        with os.fdopen(descriptor, "wb") as stream:
-            stream.write(replacement)
-            stream.flush()
-            os.fsync(stream.fileno())
-            os.fchmod(stream.fileno(), path.stat().st_mode & 0o777)
-        if path.is_symlink() or path.read_bytes() != expected:
-            raise BookError(
-                "mightier.toml changed during the operation. The concurrent edit was kept."
-            )
-        temporary.replace(path)
-    finally:
-        temporary.unlink(missing_ok=True)
+    atomic_write(path, expected, replacement)
 
 
 def destination(project, relative):
@@ -80,22 +61,6 @@ def destination(project, relative):
     if path.exists() or path.is_symlink():
         raise BookError(f"{relative}: already exists. Nothing was overwritten.")
     return path
-
-
-def create_file(path, content, mode=None):
-    """Exclusive creation avoids overwriting an existing or newly created file."""
-    try:
-        stream = path.open("xb")
-    except FileExistsError as error:
-        raise BookError(f"{path}: already exists. Nothing was overwritten.") from error
-    try:
-        with stream:
-            stream.write(content)
-            if mode is not None:
-                os.fchmod(stream.fileno(), mode)
-    except BaseException:
-        path.unlink(missing_ok=True)
-        raise
 
 
 def remove_created(path, content):

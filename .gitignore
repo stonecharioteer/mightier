@@ -8,3 +8,5 @@ __pycache__/
 mightier.log*
 .mightier-log.lock
 .mightier-project.lock
+.mightier-metadata.lock
+.mightier-*

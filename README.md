@@ -48,6 +48,13 @@ published to PyPI yet. `uvx mightier` alone is not the documented install method
 It leaves available tools unchanged. Homebrew also installs EPUBCheck's Java
 dependency. Homebrew and uv are initial prerequisites, not installed by the CLI.
 
+## Command order
+
+Resource commands put the resource first: `character edit`, `chapter rename`,
+and `reference new`. Version 0.2 replaces the old action-first forms.
+Project commands such as `init`, `check`, `build`, and `serve` remain at the top level.
+Use `mightier character --help` to see a resource's actions.
+
 ## Initialize a book
 
 Create a book and enter its folder:
@@ -99,9 +106,9 @@ paragraph before publication.
 From a book folder:
 
 ```sh
-mightier new character john-doe
-mightier new place greyhaven
-mightier new reference doe2024
+mightier character new john-doe
+mightier place new greyhaven
+mightier reference new doe2024
 mightier check
 mightier build
 mightier build --format html
@@ -129,16 +136,16 @@ a writing repository.
 From the book folder:
 
 ```sh
-mightier new chapter 02-return --title "The return"
-mightier rename chapter 02-return 02-homecoming
+mightier chapter new 02-return --title "The return"
+mightier chapter rename 02-return 02-homecoming
 ```
 
-`new chapter` creates `chapters/02-return.md` with the requested heading and
+`chapter new` creates `chapters/02-return.md` with the requested heading and
 appends its path to `chapters` in `mightier.toml`. Omit `--title` to derive a
 heading from the name. Names are lowercase filename stems with hyphens. The
 `.md` extension is added automatically. Supply any numbering yourself.
 
-`rename chapter` renames the file to `chapters/02-homecoming.md` and replaces its
+`chapter rename` renames the file to `chapters/02-homecoming.md` and replaces its
 path at the same position in the chapter list. It preserves all chapter text,
 including the heading. To change the displayed title, edit the Markdown heading
 in your editor. Links in other files are not rewritten.
@@ -155,8 +162,8 @@ control. Generated projects already include an ignore rule.
 From another folder, use the project option:
 
 ```sh
-mightier -P my-book new chapter 03-departure --title "Departure"
-mightier -P my-book rename chapter 03-departure 03-the-road
+mightier -P my-book chapter new 03-departure --title "Departure"
+mightier -P my-book chapter rename 03-departure 03-the-road
 ```
 
 ## Share metadata across a series
@@ -198,7 +205,7 @@ or select it with `-P` or `--project`. For example, add a shared character from
 the series folder:
 
 ```sh
-mightier -P books/book-01 new character john-doe
+mightier -P books/book-01 character new john-doe
 ```
 
 There is no multi-book build command.
@@ -252,8 +259,9 @@ Tags also work in the Markdown bodies of character and place records. Notes can
 link to other notes without including their contents recursively. Name fields
 themselves remain literal text.
 
-Keep IDs equal to filenames without `.md`. Rename a character by changing its
-name fields, not its ID. Names are literal text. The tool does not guess
+Keep IDs equal to filenames without `.md`. To change only a displayed name,
+edit its name fields and keep the ID. To change the ID and file together, use the
+resource's `rename` command described below. Names are literal text. The tool does not guess
 possessives or pronouns.
 
 Unknown IDs, missing name forms, duplicate YAML keys, and unfinished prose tags
@@ -273,10 +281,10 @@ and appearance indexes can be added later. They are not generated yet.
 ## Edit individual records
 
 ```sh
-mightier edit character john-doe
-mightier edit place greyhaven
-mightier edit reference doe2024
-mightier edit book
+mightier character edit john-doe
+mightier place edit greyhaven
+mightier reference edit doe2024
+mightier book edit
 ```
 
 These commands use `$VISUAL`, then `$EDITOR`, then Neovim or vi. Character and
@@ -289,10 +297,62 @@ Mightier validates the saved data when the editor exits. Invalid edits are kept
 so you can correct them. No second copy or editor-specific data store is used.
 Direct edits with your usual editor work too.
 
+## Rename a shared character or place
+
+Save open editor buffers before renaming an ID. For example:
+
+```sh
+mightier character rename john-doe jane-doe --dry-run
+mightier character rename john-doe jane-doe
+```
+
+This renames `characters/john-doe.md` to `characters/jane-doe.md`, changes its YAML
+`id`, and updates both bare and explicit tag references. Display-name fields are
+preserved. To change those too, run `mightier character edit jane-doe` afterward.
+Places support the same operation through `mightier place rename OLD NEW`.
+
+The operation updates Markdown files in every discovered book that uses the
+same metadata directory, including unlisted drafts and shared notes. Exact tag
+tokens in code examples follow the new ID too. Ordinary prose, literal `names`
+fields, chapter order, bibliography keys, and generated exports are not changed.
+Books using another metadata directory are left alone, including their metadata
+folders inside a selected book's directory. Renaming stops if independent books
+have overlapping metadata roots or conflicting book and metadata paths.
+
+### Choose the rename scope
+
+Inside a Git repository, the default scope is its root when it contains the
+shared metadata. Otherwise, the command can use the current series directory
+when it contains both the selected book and its metadata. If neither applies,
+it asks for an explicit scope rather than guessing a wider directory.
+
+From the series root:
+
+```sh
+mightier -P books/book-01 character rename john-doe jane-doe --scope . --dry-run
+mightier -P books/book-01 character rename john-doe jane-doe --scope .
+```
+
+Choose a scope containing **all books that share the record**. Books outside it
+are not scanned. Hidden version-control directories, build output, caches, and
+virtual environments are excluded. Nested books with different metadata are
+not modified. A malformed book configuration stops discovery before edits begin.
+
+Renaming refuses an existing destination, linked source files, and unsupported
+ID aliases. It preserves Markdown formatting, YAML comments, newlines, and file
+permissions. These operations need POSIX file locks and hard links. File writes
+are atomic, and failed operations attempt to restore prior content. If a concurrent edit prevents a safe rollback, both metadata
+records are kept and the command reports the files to review.
+
+A hidden `.mightier-metadata.lock` coordinates shared renames. Keep it out of
+version control. The command updates files on disk, not unsaved editor buffers.
+Reload affected buffers and reopen the renamed record afterward. If its old
+notes page was open, return to the book and follow the updated link.
+
 ## References
 
 `init` creates an empty shared `references.bib` and records its path in
-`mightier.toml`. `new reference KEY` appends a placeholder BibTeX entry without
+`mightier.toml`. `reference new KEY` appends a placeholder BibTeX entry without
 replacing existing entries. Edit the title, author, date, and other details.
 
 Use Pandoc citations in chapter prose:
@@ -354,8 +414,9 @@ Completion includes subcommands, options, directory paths, and existing record
 IDs. For example, press Tab after the final space:
 
 ```text
-mightier -P my-book rename chapter <Tab>
-mightier -P my-book edit character <Tab>
+mightier -P my-book chapter rename <Tab>
+mightier -P my-book character edit <Tab>
+mightier -P my-book character rename <Tab>
 ```
 
 Chapter suggestions come from the selected book's `mightier.toml`, not from a
@@ -364,9 +425,10 @@ nearest parent book configuration. New chapters and renames appear on the next
 Tab request. Ambiguous chapter names are offered as exact book-relative paths.
 
 `-P`, `--project`, and `--metadata-dir` complete directory paths. Existing
-character, place, and reference IDs are suggested for `edit`. New IDs and the
-new name in `rename chapter` are left for you to type, rather than suggesting
-existing names that would conflict.
+character, place, and reference IDs are suggested for their `edit` action.
+Character and place IDs are also suggested for `rename`. New IDs and rename
+destinations are left for you to type, rather than suggesting existing names
+that would conflict.
 
 Completion requests are read-only. They do not perform the requested operation,
 create chapters, change configuration, or write logs. Missing or invalid book configurations

@@ -94,11 +94,13 @@ class ShellCompletionTests(ProjectCase):
         self.assertEqual(record_names("place")("", self.arguments), ["greyhaven"])
 
     def test_actual_protocol_completes_subcommands_and_flags(self):
-        self.assertIn("rename", self.complete("mightier "))
-        self.assertIn("chapter", self.complete("mightier new "))
-        self.assertEqual(self.complete("mightier rename "), {"chapter"})
+        self.assertIn("chapter", self.complete("mightier "))
+        self.assertEqual(self.complete("mightier chapter "), {"new", "rename"})
+        self.assertEqual(
+            self.complete("mightier character "), {"new", "edit", "rename"}
+        )
         self.assertIn("--project", self.complete("mightier --pr"))
-        self.assertIn("--title", self.complete("mightier new chapter 03-next --t"))
+        self.assertIn("--title", self.complete("mightier chapter new 03-next --t"))
 
     def test_project_options_complete_directories_not_files(self):
         (self.base / "books/not-a-book.txt").write_text("Not a project directory.")
@@ -111,40 +113,53 @@ class ShellCompletionTests(ProjectCase):
     def test_edit_reference_completion_uses_the_selected_bibliography(self):
         self.project.new_reference("doe2024")
         self.assertEqual(
-            self.complete("mightier -P books/book-01 edit reference do"), {"doe2024"}
+            self.complete("mightier -P books/book-01 reference edit do"), {"doe2024"}
         )
 
     def test_actual_protocol_completes_selected_chapters_and_prefixes(self):
-        prefix = "mightier -P books/book-01 rename chapter "
+        prefix = "mightier -P books/book-01 chapter rename "
         self.assertEqual(self.complete(prefix), {"01-arrival", "02-return"})
         self.assertEqual(self.complete(prefix + "02-"), {"02-return"})
         self.assertEqual(
-            self.complete("mightier --project books/book-01 rename chapter "),
+            self.complete("mightier --project books/book-01 chapter rename "),
             {"01-arrival", "02-return"},
         )
         self.assertEqual(
-            self.complete("mightier rename chapter ", cwd=self.chapter.parent),
+            self.complete("mightier chapter rename ", cwd=self.chapter.parent),
             {"01-arrival", "02-return"},
         )
 
     def test_completion_refreshes_after_additions_and_renames(self):
         from mightier.chapters import rename_chapter
 
-        prefix = "mightier -P books/book-01 rename chapter "
+        prefix = "mightier -P books/book-01 chapter rename "
         self.assertIn("02-return", self.complete(prefix))
         rename_chapter(self.project, "02-return", "02-homecoming")
         self.assertEqual(self.complete(prefix), {"01-arrival", "02-homecoming"})
 
     def test_new_names_are_not_completed_with_existing_records_or_files(self):
-        self.assertEqual(self.complete("mightier -P books/book-01 new chapter "), set())
+        self.assertEqual(self.complete("mightier -P books/book-01 chapter new "), set())
         self.assertEqual(
-            self.complete("mightier -P books/book-01 new character "), set()
+            self.complete("mightier -P books/book-01 character new "), set()
         )
         self.assertEqual(
-            self.complete("mightier -P books/book-01 rename chapter 02-return "), set()
+            self.complete("mightier -P books/book-01 chapter rename 02-return "), set()
         )
         self.assertEqual(
-            self.complete("mightier -P books/book-01 edit character jo"), {"john-doe"}
+            self.complete("mightier -P books/book-01 character edit jo"), {"john-doe"}
+        )
+
+    def test_character_rename_completes_ids_and_refreshes_after_rename(self):
+        from mightier.renaming import rename_entity
+
+        prefix = "mightier -P books/book-01 character rename "
+        self.assertEqual(self.complete(prefix), {"john-doe"})
+        self.assertEqual(self.complete(prefix + "john-doe "), set())
+        self.assertIn("--scope", self.complete(prefix + "john-doe jane-doe --s"))
+        rename_entity(self.project, "character", "john-doe", "jane-doe", self.base)
+        self.assertEqual(self.complete(prefix), {"jane-doe"})
+        self.assertEqual(
+            self.complete("mightier -P books/book-01 character edit ja"), {"jane-doe"}
         )
 
     def test_completion_is_read_only_and_does_not_create_logs(self):
@@ -153,7 +168,7 @@ class ShellCompletionTests(ProjectCase):
             for path in self.root.rglob("*")
             if path.is_file()
         }
-        self.complete("mightier rename chapter ", cwd=self.root)
+        self.complete("mightier chapter rename ", cwd=self.root)
         after = {
             path.relative_to(self.root): path.read_bytes()
             for path in self.root.rglob("*")
@@ -191,7 +206,7 @@ class ShellCompletionTests(ProjectCase):
             + os.pathsep
             + os.environ.get("PATH", ""),
         )
-        line = "mightier -P 'book with spaces' rename chapter "
+        line = "mightier -P 'book with spaces' chapter rename "
         result = subprocess.run(
             [
                 "fish",
