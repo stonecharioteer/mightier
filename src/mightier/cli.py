@@ -1,9 +1,14 @@
 """The Mightier command-line interface."""
 
+# PYTHON_ARGCOMPLETE_OK
+
 import argparse
 import json
 import sys
 from pathlib import Path
+
+import argcomplete
+from argcomplete.completers import DirectoriesCompleter, SuppressCompleter
 
 from mightier import __version__
 from mightier.books import ENTITY_FOLDERS, BookError, Project
@@ -11,6 +16,13 @@ from mightier.completion import collect
 from mightier.logging_config import LEVELS, configure, logger
 from mightier.output import console, failure, warning
 from mightier.setup import setup
+from mightier.shell_completion import (
+    SHELLS,
+    chapter_names,
+    no_values,
+    record_names,
+    script,
+)
 
 
 class HelpParser(argparse.ArgumentParser):
@@ -42,7 +54,7 @@ def parser():
         "--project",
         type=Path,
         help="Book folder containing mightier.toml. Defaults to the nearest parent project.",
-    )
+    ).completer = DirectoriesCompleter()
     commands = result.add_subparsers(dest="command", required=True, metavar="COMMAND")
     commands.add_parser("help", help="Show the logo and command help.")
     commands.add_parser(
@@ -56,12 +68,12 @@ def parser():
         type=Path,
         nargs="?",
         help="Book folder. Defaults to the current directory.",
-    )
+    ).completer = DirectoriesCompleter()
     initialize.add_argument(
         "--metadata-dir",
         type=Path,
         help="Shared metadata directory. Relative to the current working directory.",
-    )
+    ).completer = DirectoriesCompleter()
     commands.add_parser("check", help="Validate the book and its shared metadata.")
     build = commands.add_parser(
         "build", help="Build an EPUB, or a standalone HTML file."
@@ -81,12 +93,16 @@ def parser():
     chapter = kinds.add_parser(
         "chapter", help="Create a chapter and append it to mightier.toml."
     )
-    chapter.add_argument("id", help="Filename stem, such as 02-return.")
+    chapter.add_argument(
+        "id", help="Filename stem, such as 02-return."
+    ).completer = SuppressCompleter()
     chapter.add_argument(
         "--title", help="Opening heading. Defaults to text derived from the filename."
-    )
+    ).completer = no_values
     for kind in (*ENTITY_FOLDERS, "reference"):
-        kinds.add_parser(kind, help=f"Create a {kind} record.").add_argument("id")
+        kinds.add_parser(kind, help=f"Create a {kind} record.").add_argument(
+            "id"
+        ).completer = SuppressCompleter()
     rename = commands.add_parser(
         "rename", help="Rename a file and update its configuration."
     )
@@ -96,18 +112,23 @@ def parser():
     )
     renamed_chapter.add_argument(
         "old", help="Listed filename stem or book-relative chapter path."
-    )
+    ).completer = chapter_names
     renamed_chapter.add_argument(
         "new", help="New filename stem, such as 02-homecoming."
-    )
+    ).completer = SuppressCompleter()
     edit = commands.add_parser(
         "edit", help="Open and validate an individual record or book configuration."
     )
     editable = edit.add_subparsers(dest="kind", required=True, metavar="TYPE")
     editable.add_parser("book", help="Edit mightier.toml.")
     for kind in (*ENTITY_FOLDERS, "reference"):
-        editable.add_parser(kind, help=f"Edit a {kind} record.").add_argument("id")
+        editable.add_parser(kind, help=f"Edit a {kind} record.").add_argument(
+            "id"
+        ).completer = record_names(kind)
     commands.add_parser("clean", help="Remove this book's build directory only.")
+    commands.add_parser(
+        "completion", help="Generate shell completion for Fish, Bash, or Zsh."
+    ).add_argument("shell", choices=SHELLS)
     commands.add_parser(
         "completion-data", help="Read metadata as JSON for editor integration."
     )
@@ -116,6 +137,8 @@ def parser():
 
 def main(argv=None):
     command_parser = parser()
+    # Shell completion is read-only. Run it before logging, output, or dispatch.
+    argcomplete.autocomplete(command_parser, always_complete_options=False)
     argv = sys.argv[1:] if argv is None else argv
     preliminary = argparse.ArgumentParser(add_help=False)
     preliminary.add_argument("--log-level", choices=LEVELS, default="debug")
@@ -134,6 +157,9 @@ def main(argv=None):
     try:
         if arguments.command == "help":
             command_parser.print_help()
+            return 0
+        if arguments.command == "completion":
+            sys.stdout.write(script(arguments.shell))
             return 0
         if arguments.command == "setup":
             setup()

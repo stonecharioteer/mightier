@@ -309,6 +309,43 @@ The server binds to `127.0.0.1`. It serves only generated HTML and its preview
 assets. It does not expose a directory listing, chapters, configuration, or
 private metadata files. Stop it with Ctrl-C.
 
+## Shell Tab completion
+
+Install the global `mightier` command first. Then register completion for your
+shell. In Fish:
+
+```fish
+mkdir -p ~/.config/fish/completions
+mightier completion fish > ~/.config/fish/completions/mightier.fish
+source ~/.config/fish/completions/mightier.fish
+```
+
+Fish loads this file automatically in future sessions. Bash and Zsh scripts are
+also available through `mightier completion bash` and `mightier completion zsh`.
+Source the generated script in the corresponding shell.
+
+Completion includes subcommands, options, directory paths, and existing record
+IDs. For example, press Tab after the final space:
+
+```text
+mightier -P my-book rename chapter <Tab>
+mightier -P my-book edit character <Tab>
+```
+
+Chapter suggestions come from the selected book's `mightier.toml`, not from a
+search through the series. Without `-P` or `--project`, completion finds the
+nearest parent book configuration. New chapters and renames appear on the next
+Tab request. Ambiguous chapter names are offered as exact book-relative paths.
+
+`-P`, `--project`, and `--metadata-dir` complete directory paths. Existing
+character, place, and reference IDs are suggested for `edit`. New IDs and the
+new name in `rename chapter` are left for you to type, rather than suggesting
+existing names that would conflict.
+
+Completion requests are read-only. They do not perform the requested operation,
+create chapters, change configuration, or write logs. Missing or invalid book configurations
+produce no chapter suggestions.
+
 ## Neovim completion
 
 The same repository contains a blink.cmp source under `lua/mightier/`. Configure
@@ -344,8 +381,9 @@ The SVG has a transparent background and follows a four-pixel grid:
 
 ## Logs
 
-Every CLI invocation writes DEBUG-level diagnostics to `mightier.log` in its
-current working directory, even when `--project` selects another folder. The log
+CLI commands write DEBUG-level diagnostics to `mightier.log` in their current
+working directory, even when `--project` selects another folder. Internal shell
+completion requests skip file logging. The log
 records commands, paths, build stages, subprocess results, and error tracebacks.
 It does not record full manuscript text or private note bodies.
 
