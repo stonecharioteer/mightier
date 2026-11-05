@@ -6,11 +6,12 @@ import re
 import secrets
 import threading
 import webbrowser
+from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 from urllib.parse import urlsplit
 
-from mightier.books import CONFIG, BookError
+from mightier.books import CONFIG, ENTITY_FOLDERS, BookError
 from mightier.logging_config import logger
 from mightier.output import console, failure, success
 
@@ -25,6 +26,7 @@ class Preview:
         self.lock = threading.Lock()
         self.html = ""
         self.version = ""
+        self.notes_version = secrets.token_hex(8)
         self.error = ""
         self.key = hashlib.sha256(str(project.root).encode()).hexdigest()[:16]
 
@@ -32,12 +34,15 @@ class Preview:
         with self.lock:
             return {
                 "version": self.version,
+                "notes_version": self.notes_version,
                 "ready": bool(self.html),
                 "error": self.error,
             }
 
     def rebuild(self):
         logger.debug("Rebuilding live preview for %s", self.project.root)
+        with self.lock:
+            self.notes_version = secrets.token_hex(8)
         try:
             output = self.project.build("html", announce=False)
             html = output.read_text(encoding="utf-8")
@@ -65,11 +70,37 @@ class Preview:
                 "<body><h1>Your preview will appear here.</h1>"
                 "<p>Fix the reported build error and save the file. Mightier will try again.</p></body></html>"
             )
+        return self.decorate(html, version)
+
+    def notes_page(self, kind, entity_id):
+        with self.lock:
+            version = self.notes_version
+        return self.decorate(
+            self.project.render_notes(kind, entity_id), version, notes=True
+        )
+
+    def error_page(self, message):
+        css = ASSETS.joinpath("reader.css").read_text(encoding="utf-8")
+        html = (
+            '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            f"<title>Notes error</title><style>{css}</style></head><body>"
+            "<h1>Notes could not be rendered.</h1>"
+            f"<pre>{escape(message)}</pre><p>Correct the source and save it to try again.</p></body></html>"
+        )
+        with self.lock:
+            version = self.notes_version
+        return self.decorate(html, version, notes=True)
+
+    def decorate(self, html, version, notes=False):
+        view = "notes" if notes else "book"
+        back = '<a class="mightier-back" href="/">Back to book</a>' if notes else ""
         panel = (
             f'<aside id="mightier-live" class="mightier-live" data-state="ready" '
-            f'data-version="{version}" data-project="{self.key}">'
-            '<div class="mightier-live-row"><a class="mightier-brand" href="#title-block-header">'
+            f'data-version="{version}" data-project="{self.key}" data-view="{view}">'
+            '<div class="mightier-live-row"><a class="mightier-brand" href="/">'
             '<img src="/__mightier/logo.svg" width="28" height="28" alt=""> Mightier</a>'
+            f"{back}"
             '<span class="mightier-motto">The Pen is <em>mightier</em> than the Sword.</span>'
             '<span id="mightier-status" role="status" aria-live="polite">Live preview</span></div>'
             '<pre id="mightier-error" role="alert" hidden></pre></aside>'
@@ -149,8 +180,31 @@ class PreviewHandler(BaseHTTPRequestHandler):
             return
         path = urlsplit(self.path).path
         preview = self.server.preview
+        status = 200
+        notes_route = re.fullmatch(
+            r"/__mightier/notes/(character|place)/([a-z0-9]+(?:-[a-z0-9]+)*)", path
+        )
         if path in ("/", "/index.html"):
             content, media = preview.page(), "text/html; charset=utf-8"
+        elif notes_route:
+            kind, entity_id = notes_route.groups()
+            try:
+                metadata_file = (
+                    preview.project.metadata_dir
+                    / ENTITY_FOLDERS[kind]
+                    / f"{entity_id}.md"
+                )
+                if not metadata_file.is_file():
+                    self.send_error(404)
+                    return
+                content = preview.notes_page(kind, entity_id)
+            except (BookError, OSError, UnicodeError) as error:
+                logger.exception(
+                    "Could not render author notes for %s:%s", kind, entity_id
+                )
+                content = preview.error_page(str(error))
+                status = 422
+            media = "text/html; charset=utf-8"
         elif path == "/__mightier/status":
             content = json.dumps(preview.status()).encode("utf-8")
             media = "application/json; charset=utf-8"
@@ -167,7 +221,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
         else:
             self.send_error(404)
             return
-        self.send_response(200)
+        self.send_response(status)
         self.send_header("Content-Type", media)
         self.send_header("Content-Length", str(len(content)))
         self.send_header("Cache-Control", "no-store")

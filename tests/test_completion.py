@@ -10,7 +10,7 @@ from pathlib import Path
 from test_books import ProjectCase
 
 from mightier import completion
-from mightier.books import BookError, Project
+from mightier.books import BookError, Metadata, Project
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -47,6 +47,31 @@ class CompletionTests(ProjectCase):
             },
         )
         self.assertNotIn("SECRET", str(result))
+
+    def test_standalone_metadata_completion_matches_book_context(self):
+        self.assertEqual(
+            completion.collect(Metadata(self.shared)), completion.collect(self.project)
+        )
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "mightier",
+                "completion-data",
+                "--metadata-dir",
+                str(self.shared),
+            ],
+            cwd=self.base,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        import json
+
+        self.assertEqual(json.loads(result.stdout), completion.collect(self.project))
+        self.assertNotIn("SECRET_NOTES", result.stdout)
 
     def test_invalid_record_does_not_remove_valid_records(self):
         (self.shared / "characters/broken.md").write_text("---\nid: broken\n")

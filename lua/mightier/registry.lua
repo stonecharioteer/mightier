@@ -1,7 +1,15 @@
 local Registry = {}
 Registry.__index = Registry
 
-function Registry.new(root, command) return setmetatable({ root = root, command = command, waiters = {} }, Registry) end
+function Registry.new(root, command, metadata_only)
+  return setmetatable({
+    root = root,
+    command = command,
+    waiters = {},
+    metadata_only = metadata_only,
+    metadata_dir = metadata_only and root or nil,
+  }, Registry)
+end
 
 function Registry:signature()
   local parts = {}
@@ -9,7 +17,7 @@ function Registry:signature()
     local stat = vim.uv.fs_stat(path)
     if stat then parts[#parts + 1] = table.concat({ path, stat.size, stat.mtime.sec, stat.mtime.nsec }, ":") end
   end
-  add(self.root .. "/mightier.toml")
+  if not self.metadata_only then add(self.root .. "/mightier.toml") end
   if self.metadata_dir then
     for _, folder in ipairs { "characters", "places" } do
       local directory = self.metadata_dir .. "/" .. folder
@@ -54,7 +62,9 @@ function Registry:get(callback)
     if vim.fn.executable(self.command[1]) ~= 1 then
       finish({}, "The Mightier command is missing. Install it with uv tool install, then restart Neovim.")
     else
-      local arguments = vim.list_extend(vim.deepcopy(self.command), { "--project", self.root, "completion-data" })
+      local parameters = self.metadata_only and { "completion-data", "--metadata-dir", self.root }
+        or { "--project", self.root, "completion-data" }
+      local arguments = vim.list_extend(vim.deepcopy(self.command), parameters)
       vim.system(
         arguments,
         { cwd = self.root, text = true, timeout = 30000 },

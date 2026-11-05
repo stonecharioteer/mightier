@@ -18,8 +18,11 @@ from mightier.output import success, warning
 CONFIG = "mightier.toml"
 SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 FORM = re.compile(r"[a-z][a-z0-9_-]*\Z")
-TAG = re.compile(r"\{\{([a-z]+):([a-z0-9]+(?:-[a-z0-9]+)*)\.([a-z][a-z0-9_-]*)\}\}")
+TAG = re.compile(
+    r"\{\{([a-z]+):([a-z0-9]+(?:-[a-z0-9]+)*)(?:\.([a-z][a-z0-9_-]*))?\}\}"
+)
 ENTITY_FOLDERS = {"character": "characters", "place": "places"}
+DEFAULT_FORMS = {"character": "short", "place": "name"}
 
 
 class BookError(Exception):
@@ -75,7 +78,7 @@ def require_slug(value):
     return value
 
 
-def read_entity(kind, path):
+def read_entity_document(kind, path):
     require_slug(path.stem)
     lines = path.read_text(encoding="utf-8").splitlines()
     if not lines or lines[0] != "---":
@@ -98,6 +101,11 @@ def read_entity(kind, path):
         require_text(name, f"{path}: names.{form}")
     if not isinstance(data.get("public_description", ""), str):
         raise BookError(f"{path}: public_description must be text.")
+    return data, "\n".join(lines[end + 1 :])
+
+
+def read_entity(kind, path):
+    data, _ = read_entity_document(kind, path)
     return data
 
 
@@ -122,6 +130,7 @@ def expand_text(text, entities, source, occurrences):
         key = (kind, entity_id)
         if key not in entities:
             raise BookError(f"{source}: unknown entity {kind}:{entity_id}.")
+        form = form or DEFAULT_FORMS.get(kind, "short")
         if form not in entities[key]:
             raise BookError(f"{source}: unknown name form {kind}:{entity_id}.{form}.")
         occurrences[key] = occurrences.get(key, 0) + 1
@@ -158,6 +167,32 @@ def expand_nodes(value, entities, source, occurrences):
             for key, item in value.items()
         }
     return value
+
+
+class Metadata:
+    """A shared metadata directory, independent of any particular book."""
+
+    def __init__(self, directory):
+        self.metadata_dir = Path(directory).expanduser().resolve()
+
+    def entity_files(self):
+        shared = self.metadata_dir
+        logger.debug("Reading shared metadata: %s", shared)
+        if not shared.is_dir():
+            raise BookError(f"{shared}: metadata directory is missing.")
+        for kind, folder in ENTITY_FOLDERS.items():
+            for path in sorted((shared / folder).glob("*.md")):
+                yield kind, path
+
+    def load_entities(self):
+        entities = {}
+        for kind, path in self.entity_files():
+            data = read_entity(kind, path)
+            key = (kind, data["id"])
+            if key in entities:
+                raise BookError(f"{path}: duplicate entity {kind}:{data['id']}.")
+            entities[key] = data["names"]
+        return entities
 
 
 class Project:
@@ -337,25 +372,10 @@ class Project:
         success(f"Created {path}. Names are placeholders. Edit them before use.")
 
     def entity_files(self):
-        shared = self.metadata_dir
-        logger.debug("Reading shared metadata: %s", shared)
-        if not shared.is_dir():
-            raise BookError(
-                f"{shared}: metadata directory is missing. Check metadata-dir in mightier.toml."
-            )
-        for kind, folder in ENTITY_FOLDERS.items():
-            for path in sorted((shared / folder).glob("*.md")):
-                yield kind, path
+        return Metadata(self.metadata_dir).entity_files()
 
     def load_entities(self):
-        entities = {}
-        for kind, path in self.entity_files():
-            data = read_entity(kind, path)
-            key = (kind, data["id"])
-            if key in entities:
-                raise BookError(f"{path}: duplicate entity {kind}:{data['id']}.")
-            entities[key] = data["names"]
-        return entities
+        return Metadata(self.metadata_dir).load_entities()
 
     def load_book(self):
         data = self.config()
@@ -435,6 +455,9 @@ class Project:
             },
             "lang": {"t": "MetaString", "c": data["lang"]},
         }
+        return self.resolve_citations(document), chapters
+
+    def resolve_citations(self, document):
         self.references()
         publication_metadata = document["meta"]
         document["meta"]["reference-section-title"] = {
@@ -453,12 +476,54 @@ class Project:
             )
         )
         document["meta"] = publication_metadata
-        return document, chapters
+        return document
+
+    def prepare_notes(self, kind, entity_id, entities=None):
+        require_slug(entity_id)
+        if kind not in ENTITY_FOLDERS:
+            raise BookError(f"Unknown metadata type {kind!r}.")
+        entities = self.load_entities() if entities is None else entities
+        if (kind, entity_id) not in entities:
+            raise BookError(f"Unknown entity {kind}:{entity_id}.")
+        path = self.metadata_dir / ENTITY_FOLDERS[kind] / f"{entity_id}.md"
+        data, notes = read_entity_document(kind, path)
+        description = data.get("public_description", "")
+        body = description + "\n\n" + notes if description else notes
+        document = json.loads(self.pandoc(["--from=markdown", "--to=json"], body))
+        document["blocks"] = expand_nodes(document["blocks"], entities, path, {})
+        names = data["names"]
+        title = (
+            names.get("full") or names.get("name") or names.get("short") or entity_id
+        )
+        document["meta"] = {
+            "title": {"t": "MetaString", "c": title},
+            "lang": {"t": "MetaString", "c": self.config()["lang"]},
+        }
+        return self.resolve_citations(document), path
+
+    def render_notes(self, kind, entity_id):
+        """Render author notes only for the local server. Never write an export."""
+        document, path = self.prepare_notes(kind, entity_id)
+        return self.pandoc(
+            [
+                "--from=json",
+                "--to=html5",
+                "--standalone",
+                "--toc",
+                "--embed-resources",
+                f"--css={files('mightier').joinpath('assets/reader.css')}",
+                f"--resource-path={os.pathsep.join(map(str, (path.parent, self.metadata_dir, self.root)))}",
+            ],
+            json.dumps(document),
+        )
 
     def check(self):
         _, chapters = self.prepare_book()
+        entities = self.load_entities()
+        for kind, entity_id in entities:
+            self.prepare_notes(kind, entity_id, entities)
         success(
-            f"Checked {len(chapters)} chapter(s) and shared metadata in {self.metadata_dir}."
+            f"Checked {len(chapters)} chapter(s) and {len(entities)} metadata note(s) in {self.metadata_dir}."
         )
 
     def build(self, output_format="epub", announce=True):

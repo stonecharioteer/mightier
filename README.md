@@ -221,7 +221,7 @@ public_description: A physician who lives in Greyhaven.
 
 # Background
 
-Born in Greyhaven.
+Born in {{place:greyhaven}}.
 
 # Relationships
 
@@ -238,10 +238,19 @@ forms as needed. Use them in chapters:
 ```markdown
 # Arrival
 
-{{character:john-doe.full}} returned to {{place:greyhaven.name}}.
+{{character:john-doe.full}} returned to {{place:greyhaven}}.
 
-"Wait, {{character:john-doe.short}}," she said.
+"Wait, {{character:john-doe}}," she said.
 ```
+
+Bare character tags use `names.short`: `{{character:john-doe}}` displays `John`.
+An explicit form overrides the default, such as `{{character:john-doe.full}}` or
+`{{character:john-doe.surname}}`. Bare place tags use `names.name`. If the default
+form is missing, validation fails instead of guessing another form.
+
+Tags also work in the Markdown bodies of character and place records. Notes can
+link to other notes without including their contents recursively. Name fields
+themselves remain literal text.
 
 Keep IDs equal to filenames without `.md`. Rename a character by changing its
 name fields, not its ID. Names are literal text. The tool does not guess
@@ -252,8 +261,10 @@ fail the check and build. Tags in code, raw markup, math, and link targets remai
 literal. A failed build preserves the previous output.
 
 Chapter prose, resolved names, cited bibliography entries, and the configured
-title, author, and language enter published output. Metadata notes and descriptions stay private.
-Chapter front matter does not enter output metadata. Notes placed directly in
+title, author, and language enter published output. Metadata note bodies and
+descriptions are excluded from EPUB and standalone HTML exports. The local live
+preview can display them as author notes. Chapter front matter does not enter
+output metadata. Notes placed directly in
 chapter prose will be published.
 
 References retain their IDs and name forms in the document structure. Glossaries
@@ -305,9 +316,24 @@ If a build fails, the last valid page stays visible. The page shows the error
 and recovers after you fix and save the source. It also reconnects if the server
 restarts. Use `--open` to open your browser, or `--port` to choose a port.
 
-The server binds to `127.0.0.1`. It serves only generated HTML and its preview
-assets. It does not expose a directory listing, chapters, configuration, or
-private metadata files. Stop it with Ctrl-C.
+The server binds to `127.0.0.1`. It serves generated book pages, rendered author
+notes, and preview assets. Raw Markdown, configuration files, and directory
+listings are not served. Stop it with Ctrl-C.
+
+### Linked author notes
+
+Tagged character and place names become links in the live preview. Click one to
+open its notes. Use **Back to book** to return to the draft. Tags inside the notes
+link to other characters and places. Notes also support citations from the
+book's configured bibliography.
+
+Notes update after saved changes, even while the draft has a build error.
+`mightier check` validates tags in note files as well as chapters. Book builds do
+not render note bodies, so an unfinished private note does not block an EPUB.
+
+Note pages and links exist only in the live server. They are not written to the
+build directory or included in exports. The live preview contains private author
+material. Do not publish or proxy this server.
 
 ## Shell Tab completion
 
@@ -359,14 +385,17 @@ The default command is the installed `mightier` CLI. You can instead set
 { "uvx", "--python", "3.14", "--from", "git+https://github.com/stonecharioteer/mightier", "mightier" }
 ```
 
-The source finds the current book from its nearest `mightier.toml`. It reads
-shared metadata through the CLI, not through code in the writing repository.
+The source finds the current book from its nearest `mightier.toml`. It also
+recognizes character and place Markdown files in a shared metadata directory,
+even when they are outside a book project. The metadata directory must contain
+`characters/` and `places/`, and note files must start with YAML front matter.
+It reads metadata through the CLI, not through code in the writing repository.
 Suggestions start at `{{` or `{{c` and continue through type, ID, and name form.
 Selecting a form inserts the closing `}}` without duplicating existing braces.
 
 With a comma local leader, `,c` and `,p` start character and place tags in normal
 mode and enter insert mode. Mappings apply only to Markdown buffers inside a
-book project. Saved metadata changes refresh the suggestions. Invalid records
+book project or recognized shared metadata note files. Saved metadata changes refresh the suggestions. Invalid records
 produce a warning without hiding valid records. Private notes do not enter
 completion data.
 

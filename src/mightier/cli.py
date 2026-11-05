@@ -11,7 +11,7 @@ import argcomplete
 from argcomplete.completers import DirectoriesCompleter, SuppressCompleter
 
 from mightier import __version__
-from mightier.books import ENTITY_FOLDERS, BookError, Project
+from mightier.books import ENTITY_FOLDERS, BookError, Metadata, Project
 from mightier.completion import collect
 from mightier.logging_config import LEVELS, configure, logger
 from mightier.output import console, failure, warning
@@ -129,9 +129,14 @@ def parser():
     commands.add_parser(
         "completion", help="Generate shell completion for Fish, Bash, or Zsh."
     ).add_argument("shell", choices=SHELLS)
-    commands.add_parser(
+    data_command = commands.add_parser(
         "completion-data", help="Read metadata as JSON for editor integration."
     )
+    data_command.add_argument(
+        "--metadata-dir",
+        type=Path,
+        help="Read a standalone metadata directory without a book project.",
+    ).completer = DirectoriesCompleter()
     return result
 
 
@@ -171,6 +176,20 @@ def main(argv=None):
                 )
             project = Project(arguments.directory or arguments.project or Path.cwd())
             project.initialize(arguments.metadata_dir)
+            return 0
+        if (
+            arguments.command == "completion-data"
+            and arguments.metadata_dir is not None
+        ):
+            if arguments.project is not None:
+                raise BookError(
+                    "Choose either --project or --metadata-dir for completion-data."
+                )
+            print(
+                json.dumps(
+                    collect(Metadata(arguments.metadata_dir)), ensure_ascii=False
+                )
+            )
             return 0
         project = (
             Project(arguments.project)

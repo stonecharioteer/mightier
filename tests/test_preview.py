@@ -15,7 +15,7 @@ from mightier.preview import Preview, PreviewServer
 
 
 @unittest.skipUnless(shutil.which("pandoc"), "Pandoc is required")
-class PreviewTests(ProjectCase):
+class PreviewCase(ProjectCase):
     def setUp(self):
         super().setUp()
         self.sample()
@@ -63,6 +63,8 @@ class PreviewTests(ProjectCase):
         with urlopen(self.url + path, timeout=5) as response:
             return response.read()
 
+
+class PreviewTests(PreviewCase):
     def test_serves_only_published_page_and_known_assets(self):
         page = self.read().decode()
         self.assertIn("John", page)

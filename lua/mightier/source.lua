@@ -42,8 +42,8 @@ end
 function Source:get_completions(ctx, callback)
   local function respond(items) callback { items = items, is_incomplete_forward = true, is_incomplete_backward = true } end
   local plugin = require "mightier"
-  local root = plugin.project_root(ctx.bufnr)
-  if not root then
+  local context = plugin.context(ctx.bufnr)
+  if not context then
     respond {}
     return
   end
@@ -71,8 +71,10 @@ function Source:get_completions(ctx, callback)
     return
   end
 
-  self.registries[root] = self.registries[root] or require("mightier.registry").new(root, plugin.command)
-  return self.registries[root]:get(function(records)
+  local key = context.key
+  self.registries[key] = self.registries[key]
+    or require("mightier.registry").new(context.root, plugin.command, context.metadata)
+  return self.registries[key]:get(function(records)
     local items = {}
     for _, record in ipairs(records) do
       if record.type == kind then

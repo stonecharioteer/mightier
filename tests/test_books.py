@@ -238,13 +238,38 @@ class BookTests(ProjectCase):
             self.project.clean()
         self.assertTrue((self.shared / "references.bib").is_file())
 
+    def test_bare_character_tag_defaults_to_short(self):
+        entities = {("character", "john-doe"): {"short": "John", "full": "John Doe"}}
+        bare = books.expand_text("{{character:john-doe}}", entities, "chapter.md", {})
+        explicit = books.expand_text(
+            "{{character:john-doe.short}}", entities, "chapter.md", {}
+        )
+        self.assertEqual(bare, explicit)
+        self.assertIn(["data-form", "short"], bare[0]["c"][0][2])
+
+    def test_bare_place_tag_defaults_to_name(self):
+        entities = {("place", "greyhaven"): {"name": "Greyhaven"}}
+        self.assertEqual(
+            books.expand_text("{{place:greyhaven}}", entities, "chapter.md", {}),
+            books.expand_text("{{place:greyhaven.name}}", entities, "chapter.md", {}),
+        )
+
+    def test_bare_tags_report_unknown_ids_and_missing_default_forms(self):
+        entities = {("character", "john-doe"): {"full": "John Doe"}}
+        with self.assertRaisesRegex(
+            BookError, "unknown name form character:john-doe.short"
+        ):
+            books.expand_text("{{character:john-doe}}", entities, "chapter.md", {})
+        with self.assertRaisesRegex(BookError, "unknown entity character:missing"):
+            books.expand_text("{{character:missing}}", entities, "chapter.md", {})
+
     def test_expand_validates_tags(self):
         entities = {("character", "john-doe"): {"short": "John"}}
         for text in (
             "{{character:missing.short}}",
             "{{character:john-doe.full}}",
             "{{animal:john-doe.short}}",
-            "{{character:john-doe}}",
+            "{{character:john-doe.}}",
             "{{character:",
             "broken}}",
             "{{{{character:john-doe.short}}",
@@ -287,7 +312,7 @@ class PandocTests(ProjectCase):
             "{{character:john-doe.unknown}}",
             "{{character:missing.short}}",
             "{{ character:john-doe.short }}",
-            "{{character:john-doe}}",
+            "{{character:john-doe.}}",
         ):
             with self.subTest(text=text):
                 self.chapter.write_text(f"# Chapter\n\n{text}\n")

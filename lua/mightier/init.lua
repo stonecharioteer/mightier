@@ -11,7 +11,29 @@ function M.project_root(bufnr)
   if marker then return vim.fs.dirname(marker) end
 end
 
-function M.contains(bufnr) return M.project_root(bufnr) ~= nil end
+function M.context(bufnr)
+  bufnr = bufnr == 0 and vim.api.nvim_get_current_buf() or bufnr
+  if not vim.api.nvim_buf_is_valid(bufnr) or vim.bo[bufnr].filetype ~= "markdown" or vim.bo[bufnr].buftype ~= "" then
+    return
+  end
+  local project = M.project_root(bufnr)
+  if project then return { root = project, key = project, metadata = false } end
+  local name = vim.api.nvim_buf_get_name(bufnr)
+  if name == "" then return end
+  local path = vim.fs.normalize(vim.fn.resolve(name))
+  local directory = vim.fs.dirname(path)
+  local kind = vim.fs.basename(directory)
+  if kind ~= "characters" and kind ~= "places" then return end
+  if not path:match "%.md$" or vim.api.nvim_buf_get_lines(bufnr, 0, 1, false)[1] ~= "---" then return end
+  local root = vim.fs.dirname(directory)
+  for _, folder in ipairs { "characters", "places" } do
+    local stat = vim.uv.fs_stat(root .. "/" .. folder)
+    if not stat or stat.type ~= "directory" then return end
+  end
+  return { root = root, key = "metadata:" .. root, metadata = true }
+end
+
+function M.contains(bufnr) return M.context(bufnr) ~= nil end
 
 function M.setup(opts)
   opts = opts or {}

@@ -151,4 +151,26 @@ equal(true, vim.b[buffer].mightier_mapped)
 plugin.setup { command = { assert(vim.env.MIGHTIER_TEST_PYTHON), "-m", "mightier" } }
 equal(true, vim.b[buffer].mightier_mapped)
 
+-- Standalone shared metadata files need no book buffer or ancestor config.
+source = Source.new {}
+buffer = vim.api.nvim_create_buf(true, false)
+vim.api.nvim_set_current_buf(buffer)
+local notes_path = assert(vim.env.MIGHTIER_TEST_METADATA) .. "/characters/john-doe.md"
+vim.api.nvim_buf_set_name(buffer, notes_path)
+vim.api.nvim_buf_set_lines(buffer, 0, -1, false, vim.fn.readfile(notes_path))
+vim.bo[buffer].filetype = "markdown"
+equal(nil, plugin.project_root(buffer))
+equal(true, plugin.context(buffer).metadata)
+equal(true, plugin.contains(buffer))
+equal(true, vim.b[buffer].mightier_mapped)
+equal("Johnny", find(get "{{character:john-doe.", "short").detail)
+equal("Greyhaven", find(get "{{place:greyhaven.", "name").detail)
+equal(1, vim.tbl_count(source.registries))
+local place_notes = assert(vim.env.MIGHTIER_TEST_METADATA) .. "/places/greyhaven.md"
+vim.api.nvim_buf_set_name(buffer, place_notes)
+vim.api.nvim_buf_set_lines(buffer, 0, -1, false, vim.fn.readfile(place_notes))
+equal(true, plugin.context(buffer).metadata)
+equal(true, vim.b[buffer].mightier_mapped)
+equal("Johnny", find(get "{{character:john-doe.", "short").detail)
+
 print("Neovim completion checks passed: " .. assertions)
